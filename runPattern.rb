@@ -16,8 +16,6 @@ end
 # check_yuv
 ###############################################################################
 def check_yuv (binFile, idxFile, nbFile, maxSize)
-  print "= #{(idxFile).to_s.rjust(nbFile.to_s.size)}/#{nbFile} = #{binFile.ljust(maxSize)}"
-  return true if grep_msg("Segmentation fault", "error") == -1
   begin
     md5 = "#{File.basename(binFile, File.extname(binFile))}.md5"
     if $appliIdx == AVCONV_IDX or $appliIdx == FFMPEG_IDX then
@@ -47,9 +45,6 @@ end
 # check_error
 ###############################################################################
 def check_error (binFile, idxFile, nbFile, maxSize)
-  print "= #{(idxFile).to_s.rjust(nbFile.to_s.size)}/#{nbFile} = #{binFile.ljust(maxSize)}"
-  return true if grep_msg("Segmentation fault", "error") == -1
-  
   cmd = "grep \"Correct\" error"
   ret = sysIO(cmd)
   if ret[1] == nil and $appliIdx != HM_IDX then
@@ -67,7 +62,12 @@ def check_error (binFile, idxFile, nbFile, maxSize)
       File.delete("#{$appli[$appliIdx]["label"]}_#{md5}")
       File.delete("#{$appli[HM_IDX]["label"]}_#{md5}")
       if ret[1] != nil then
-        puts " error ="
+        puts " MD5 error  ="
+        error = "error.#{binFile}"
+        log = "log.#{binFile}"
+        %x(mv error #{error})
+        %x(mv log #{log})
+        puts "see {error,log}.#{binFile} files for more informations"
         exit if $stop == true
       else
         puts " ok    ="

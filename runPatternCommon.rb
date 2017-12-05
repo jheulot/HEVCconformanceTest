@@ -16,7 +16,7 @@ $appli          = []
 $appli[OPEN_HEVC_IDX]             = {}
 $appli[OPEN_HEVC_IDX]["option"]   = "-n -i"
 $appli[OPEN_HEVC_IDX]["output"]   = ""
-$appli[OPEN_HEVC_IDX]["label"]    = "openHEVC"
+$appli[OPEN_HEVC_IDX]["label"]    = "ohplay"
 #
 #
 $appli[AVCONV_IDX]                = {}
@@ -65,7 +65,7 @@ def getopts (argv)
     end
   end
   help() if $sourcePattern == nil or $exec == nil or ($threadType!=1 and $threadType!=2 and $threadType!=4) 
-  $appliIdx = if /hevc/ =~ $exec then OPEN_HEVC_IDX 
+  $appliIdx = if /ohplay/ =~ $exec then OPEN_HEVC_IDX 
               elsif /TAppDecoder/ =~ $exec then HM_IDX
               elsif /ffmpeg/ =~ $exec then FFMPEG_IDX
               else AVCONV_IDX end
@@ -232,25 +232,39 @@ def run (binFile, idxFile, nbFile, maxSize)
 
   while (run and nbRun < 3) do
     nbRun = nbRun + 1
-    cmd = "#{$exec} #{$appli[$appliIdx]["option"]} #{$sourcePattern}/#{binFile} #{$appli[$appliIdx]["output"]} > log 2> error"
-    # puts "#{nbRun} : #{cmd}"
+    cmd = "sh -c 'catchsegv #{$exec} #{$appli[$appliIdx]["option"]} #{$sourcePattern}/#{binFile} #{$appli[$appliIdx]["output"]} 1> log 2> error'  >/dev/null 2>&1"
+    #puts "#{nbRun} : #{cmd}"
     timeStart = Time.now
-    cmd_ret = sysIO(cmd)
+    cmd_ret = %x(#{cmd})
+    cmd_status = $?.exitstatus
     $runTime = Time.now - timeStart
 
-    if cmd_ret == nil then
-      puts "= #{(idxFile).to_s.rjust(nbFile.to_s.size)}/#{nbFile} = #{binFile.ljust(maxSize)} Timeout ="
-      next
-    end
+    #print "status: #{cmd_ret}\n"
+    #print "status: #{cmd_status}\n"
 
-    if $check == true then
-      if $yuv == true then
-        run = check_yuv(binFile, idxFile, nbFile, maxSize)
-      else
-        run = check_error(binFile, idxFile, nbFile, maxSize)
-      end
+    print "= #{(idxFile).to_s.rjust(nbFile.to_s.size)}/#{nbFile} = #{binFile.ljust(maxSize)}"
+
+    case cmd_status
+    when 0
+        if $check == true then
+            if $yuv == true then
+                run = check_yuv(binFile, idxFile, nbFile, maxSize)
+            else
+                run = check_error(binFile, idxFile, nbFile, maxSize)
+            end
+        else
+            run = check_perfs(binFile, idxFile, nbFile, maxSize)
+        end
+    when 139
+        puts " Segmentation Fault ="
+        log = "log.#{binFile}"
+        %x(mv log #{log})
+        puts "see #{log} files for more informations"
+        run = false
+        exit if $stop == true
     else
-      run = check_perfs(binFile, idxFile, nbFile, maxSize)
+        puts " Failed,  return code : #{cmd_status} ="
+        exit if $stop == true
     end
     File.delete(getFileNameYUV(binFile)) if File.exist?(getFileNameYUV(binFile))
     File.delete("log")                   if File.exist?("log")
